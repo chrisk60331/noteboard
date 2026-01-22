@@ -441,23 +441,64 @@ async function deleteCategory(category) {
         return;
     }
     
+    // Save current state for potential rollback
+    const previousCategories = [...categories];
+    const previousNotes = notes.map(note => ({
+        ...note,
+        categories: note.categories ? [...note.categories] : []
+    }));
+    
+    // Optimistically update UI first
+    // Remove category from categories list
+    categories = categories.filter(cat => cat !== category);
+    
+    // Remove from selected categories if it was selected
+    selectedCategories.delete(category);
+    
+    // Remove category from all notes
+    notes.forEach(note => {
+        if (note.categories && note.categories.includes(category)) {
+            note.categories = note.categories.filter(cat => cat !== category);
+        }
+    });
+    
+    // Update UI immediately
+    renderTagFilterBar();
+    renderNotesList();
+    
+    // Also update current note categories if it has this category
+    if (currentNoteCategories.includes(category)) {
+        currentNoteCategories = currentNoteCategories.filter(cat => cat !== category);
+        renderNoteCategories();
+    }
+    
+    // Then sync with backend
     try {
         await apiCall(`/api/categories/${encodeURIComponent(category)}`, {
             method: 'DELETE'
         });
         
-        // Remove from selected categories if it was selected
-        selectedCategories.delete(category);
-        
-        // Reload notes and categories
+        // Reload from server to ensure sync (in case backend made other changes)
         await loadNotes();
         await loadCategories();
-        
-        // Update UI
-        renderTagFilterBar();
-        renderNotesList();
     } catch (error) {
         console.error('Failed to delete category:', error);
+        
+        // Rollback on error
+        categories = previousCategories;
+        notes = previousNotes;
+        renderTagFilterBar();
+        renderNotesList();
+        
+        // Restore current note categories if needed
+        if (currentNoteId) {
+            const note = notes.find(n => n.id === currentNoteId);
+            if (note) {
+                currentNoteCategories = note.categories ? [...note.categories] : [];
+                renderNoteCategories();
+            }
+        }
+        
         alert('Failed to delete category: ' + error.message);
     }
 }

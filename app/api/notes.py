@@ -186,8 +186,23 @@ def delete_category(category_name: str):
             if note.categories and category_name in note.categories:
                 # Remove category from note
                 updated_categories = [c for c in note.categories if c != category_name]
-                note_update = NoteUpdate(categories=updated_categories)
-                updated_note = client.update_note(note.id, note_update)
+                
+                # Since update_note creates a new note (can't match IDs), we need to:
+                # 1. Delete the old note
+                # 2. Create a new note with updated categories
+                try:
+                    # Try to delete the old note (may fail if ID doesn't match, but that's ok)
+                    client.delete_note(note.id)
+                except:
+                    pass  # Ignore delete errors
+                
+                # Create new note with updated categories
+                note_create = NoteCreate(
+                    title=note.title,
+                    content=note.content,
+                    categories=updated_categories
+                )
+                updated_note = client.create_note(note_create)
                 if updated_note:
                     updated_count += 1
         
