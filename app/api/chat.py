@@ -44,12 +44,13 @@ def chat():
         context_notes = data.get("context_notes", None)
         assistant_id = data.get("assistant_id", None)
         thread_id = data.get("thread_id", None)
+        categories = data.get("categories", None)  # Optional list of categories to filter memories
         
         if not message:
             return jsonify({"error": "Message is required"}), 400
         
         client = get_backboard_client()
-        result = client.chat(message, context_notes, assistant_id=assistant_id, thread_id=thread_id)
+        result = client.chat(message, context_notes, assistant_id=assistant_id, thread_id=thread_id, categories=categories)
         
         # Invalidate thread cache for this assistant since a new message was sent
         if assistant_id:

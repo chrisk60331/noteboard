@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, Field
 
 
@@ -10,6 +10,7 @@ class Note(BaseModel):
     content: str
     created_at: datetime
     updated_at: datetime
+    categories: List[str] = []
 
     class Config:
         json_encoders = {
@@ -21,9 +22,11 @@ class NoteCreate(BaseModel):
     """Model for creating a new note"""
     title: str = Field(..., min_length=1)
     content: str = ""
+    categories: Optional[List[str]] = None
 
 
 class NoteUpdate(BaseModel):
     """Model for updating an existing note"""
     title: Optional[str] = Field(None, min_length=1)
     content: Optional[str] = None
+    categories: Optional[List[str]] = None

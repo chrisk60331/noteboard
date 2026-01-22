@@ -4,7 +4,23 @@
 
 {% block content %}
 <div class="px-4 py-6 sm:px-0">
-    <div class="flex h-[calc(100vh-10rem)] border border-slate-200/50 dark:border-slate-700/50 rounded-2xl bg-white/60 dark:bg-slate-800/60 backdrop-blur-xl shadow-xl overflow-hidden transition-colors duration-200">
+    <!-- Tag Filter Bar -->
+    <div class="mb-4 p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200/50 dark:border-slate-700/50 shadow-sm transition-colors duration-200">
+        <div class="flex items-center gap-3 flex-wrap">
+            <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Filter by tags:</span>
+            <div id="tag-filter-container" class="flex items-center gap-2 flex-wrap flex-1">
+                <!-- Tags will be loaded here -->
+            </div>
+            <button onclick="extractTagsForSelected()" id="extract-tags-btn" class="ml-auto px-3 py-1.5 text-xs bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 font-medium shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                </svg>
+                Extract Tags
+            </button>
+        </div>
+    </div>
+    
+    <div class="flex h-[calc(100vh-14rem)] border border-slate-200/50 dark:border-slate-700/50 rounded-2xl bg-white/60 dark:bg-slate-800/60 backdrop-blur-xl shadow-xl overflow-hidden transition-colors duration-200">
         <!-- Sidebar -->
         <div class="w-72 border-r border-slate-200/50 dark:border-slate-700/50 flex flex-col bg-gradient-to-b from-white to-slate-50/50 dark:from-slate-800 dark:to-slate-900/50 transition-colors duration-200">
             <div class="p-5 border-b border-slate-200/50 dark:border-slate-700/50">
@@ -63,6 +79,12 @@
                 </div>
             </div>
             
+            <!-- Notes Count Indicator -->
+            <div id="notes-count-indicator" class="hidden px-4 py-2 border-b border-slate-200/50 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/50">
+                <div class="text-xs text-slate-600 dark:text-slate-400">
+                    <span id="notes-count-text"></span>
+                </div>
+            </div>
             <div class="flex-1 overflow-y-auto" id="notes-list">
                 <!-- Notes will be loaded here -->
             </div>
@@ -81,7 +103,7 @@
             
             <div id="editor" class="hidden flex-1 flex flex-col">
                 <div class="p-6 border-b border-slate-200/50 dark:border-slate-700/50 bg-gradient-to-r from-white to-slate-50/30 dark:from-slate-800 dark:to-slate-900/30 transition-colors duration-200">
-                    <div class="flex items-center justify-between gap-4">
+                    <div class="flex items-center justify-between gap-4 mb-4">
                         <input 
                             type="text" 
                             id="note-title" 
@@ -91,6 +113,25 @@
                         <div id="save-status" class="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
                             <span id="save-status-text"></span>
                         </div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-sm text-slate-600 dark:text-slate-400">Categories:</span>
+                        <div id="note-categories-container" class="flex items-center gap-2 flex-wrap flex-1">
+                            <!-- Category chips will be added here -->
+                        </div>
+                        <input 
+                            type="text" 
+                            id="category-input" 
+                            placeholder="Add category..." 
+                            class="px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-900 dark:text-slate-100 dark:bg-slate-700 placeholder-slate-400 dark:placeholder-slate-500"
+                            onkeydown="handleCategoryInput(event)"
+                        >
+                        <button onclick="extractTagsForCurrentNote()" class="px-3 py-1.5 text-xs bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 font-medium shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-1" title="Extract tags using AI">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                            AI
+                        </button>
                     </div>
                 </div>
                 <div class="flex-1 p-6 overflow-y-auto bg-white dark:bg-slate-800 transition-colors duration-200">
@@ -186,6 +227,36 @@
     </div>
 </div>
 
+<!-- Tag Extraction Progress Modal -->
+<div id="extract-tags-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden transition-colors duration-200">
+        <div class="p-6 border-b border-slate-200/50 dark:border-slate-700/50 bg-gradient-to-r from-indigo-600 to-purple-600">
+            <div class="flex items-center justify-between">
+                <h3 class="text-xl font-bold text-white">Extracting Tags</h3>
+                <button onclick="closeExtractTagsModal()" class="text-white/80 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div class="p-6">
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-200" id="extract-status">Preparing extraction...</span>
+                    <span class="text-sm font-semibold text-slate-600 dark:text-slate-300" id="extract-progress">0 / 0</span>
+                </div>
+                <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-3 overflow-hidden">
+                    <div id="extract-progress-bar" class="h-full bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+            <div class="space-y-3 max-h-96 overflow-y-auto" id="extract-notes-list">
+                <!-- Extracted notes will appear here -->
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Progress Modal -->
 <div id="import-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
     <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden transition-colors duration-200">
@@ -227,10 +298,14 @@ let selectedNotes = new Set(); // Track selected notes for multi-select
 let searchQuery = ''; // Track search query
 let searchTimeout = null; // Debounce timeout for search
 let multiSelectMode = false; // Track if we're in multi-select mode
+let categories = []; // All available categories
+let selectedCategories = new Set(); // Selected categories for filtering
+let currentNoteCategories = []; // Categories for current note being edited
 
 // Load notes on page load
 document.addEventListener('DOMContentLoaded', () => {
     loadNotes();
+    loadCategories();
     
     // Set up autosave listeners
     const titleInput = document.getElementById('note-title');
@@ -295,22 +370,386 @@ async function loadNotes() {
         }
         selectedNotes.clear();
         renderNotesList();
+        loadCategories(); // Reload categories after loading notes
     } catch (error) {
         console.error('Failed to load notes:', error);
         alert('Failed to load notes: ' + error.message);
     }
 }
 
-function filterNotes() {
-    if (!searchQuery) {
-        return notes;
+async function loadCategories() {
+    try {
+        const data = await apiCall('/api/categories');
+        categories = data.map(cat => cat.name);
+        renderTagFilterBar();
+    } catch (error) {
+        console.error('Failed to load categories:', error);
+    }
+}
+
+function renderTagFilterBar() {
+    const container = document.getElementById('tag-filter-container');
+    if (!container) return;
+    
+    if (categories.length === 0) {
+        container.innerHTML = '<span class="text-sm text-slate-400 dark:text-slate-500">No categories yet</span>';
+        return;
     }
     
-    return notes.filter(note => {
-        const title = (note.title || '').toLowerCase();
-        const content = stripHtml(note.content || '').toLowerCase();
-        return title.includes(searchQuery) || content.includes(searchQuery);
-    });
+    container.innerHTML = categories.map(cat => {
+        const isSelected = selectedCategories.has(cat);
+        const count = notes.filter(n => n.categories && n.categories.includes(cat)).length;
+        return `
+            <div class="group relative inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium transition-all duration-200 ${
+                isSelected 
+                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md' 
+                    : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+            }">
+                <button 
+                    onclick="toggleCategoryFilter('${escapeHtml(cat)}')" 
+                    class="flex items-center gap-1.5"
+                >
+                    <span>${escapeHtml(cat)}</span>
+                    <span class="text-xs opacity-75">(${count})</span>
+                </button>
+                <button 
+                    onclick="event.stopPropagation(); deleteCategory('${escapeHtml(cat)}')" 
+                    class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 ml-1 p-0.5 rounded hover:bg-black/10 dark:hover:bg-white/10 flex-shrink-0"
+                    title="Delete category"
+                >
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+        `;
+    }).join('');
+}
+
+function toggleCategoryFilter(category) {
+    if (selectedCategories.has(category)) {
+        selectedCategories.delete(category);
+    } else {
+        selectedCategories.add(category);
+    }
+    renderTagFilterBar();
+    renderNotesList();
+}
+
+async function deleteCategory(category) {
+    if (!confirm(`Delete category "${category}" from all notes?`)) {
+        return;
+    }
+    
+    try {
+        await apiCall(`/api/categories/${encodeURIComponent(category)}`, {
+            method: 'DELETE'
+        });
+        
+        // Remove from selected categories if it was selected
+        selectedCategories.delete(category);
+        
+        // Reload notes and categories
+        await loadNotes();
+        await loadCategories();
+        
+        // Update UI
+        renderTagFilterBar();
+        renderNotesList();
+    } catch (error) {
+        console.error('Failed to delete category:', error);
+        alert('Failed to delete category: ' + error.message);
+    }
+}
+
+function renderNoteCategories() {
+    const container = document.getElementById('note-categories-container');
+    if (!container) return;
+    
+    container.innerHTML = currentNoteCategories.map(cat => `
+        <span class="group inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-medium">
+            ${escapeHtml(cat)}
+            <button 
+                onclick="event.stopPropagation(); removeCategory('${escapeHtml(cat)}')" 
+                class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:text-indigo-900 dark:hover:text-indigo-100"
+                title="Remove category"
+            >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </span>
+    `).join('');
+}
+
+function handleCategoryInput(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        const input = document.getElementById('category-input');
+        const category = input.value.trim();
+        if (category && !currentNoteCategories.includes(category)) {
+            currentNoteCategories.push(category);
+            renderNoteCategories();
+            input.value = '';
+            scheduleAutosave();
+        }
+    }
+}
+
+function removeCategory(category) {
+    currentNoteCategories = currentNoteCategories.filter(c => c !== category);
+    renderNoteCategories();
+    scheduleAutosave();
+}
+
+async function extractTagsForCurrentNote() {
+    if (!currentNoteId && !pendingNoteId) {
+        alert('Please save the note first before extracting tags');
+        return;
+    }
+    
+    const noteId = currentNoteId || pendingNoteId;
+    try {
+        const result = await apiCall(`/api/notes/${noteId}/extract-categories`, {
+            method: 'POST'
+        });
+        
+        if (result.extracted_categories && result.extracted_categories.length > 0) {
+            // Merge with existing categories
+            result.extracted_categories.forEach(cat => {
+                if (!currentNoteCategories.includes(cat)) {
+                    currentNoteCategories.push(cat);
+                }
+            });
+            renderNoteCategories();
+            scheduleAutosave();
+            loadCategories(); // Reload categories list
+        }
+    } catch (error) {
+        console.error('Failed to extract tags:', error);
+        alert('Failed to extract tags: ' + error.message);
+    }
+}
+
+let extractTagsEventSource = null;
+
+function closeExtractTagsModal() {
+    if (extractTagsEventSource) {
+        extractTagsEventSource.close();
+        extractTagsEventSource = null;
+    }
+    document.getElementById('extract-tags-modal').classList.add('hidden');
+}
+
+async function extractTagsForSelected() {
+    const noteIds = selectedNotes.size > 0 ? Array.from(selectedNotes) : notes.map(n => n.id);
+    
+    if (noteIds.length === 0) {
+        alert('No notes selected');
+        return;
+    }
+    
+    if (!confirm(`Extract tags for ${noteIds.length} note(s)?`)) {
+        return;
+    }
+    
+    // Show modal
+    const modal = document.getElementById('extract-tags-modal');
+    const statusEl = document.getElementById('extract-status');
+    const progressEl = document.getElementById('extract-progress');
+    const progressBar = document.getElementById('extract-progress-bar');
+    const notesList = document.getElementById('extract-notes-list');
+    
+    modal.classList.remove('hidden');
+    statusEl.textContent = 'Starting extraction...';
+    progressEl.textContent = '0 / 0';
+    progressBar.style.width = '0%';
+    notesList.innerHTML = '';
+    
+    // Use POST with body - EventSource doesn't support POST, so we'll use fetch with streaming
+    // But for better compatibility, let's use a workaround: create a temporary endpoint that accepts GET
+    // Or use fetch with ReadableStream
+    
+    // For now, use fetch API with streaming
+    try {
+        const response = await fetch('/api/notes/bulk/extract-categories', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ note_ids: noteIds })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let total = noteIds.length;
+        let current = 0;
+        let processed = 0;
+        let failed = 0;
+        
+        extractTagsEventSource = { close: () => reader.cancel() }; // Store reference for closing
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // Keep incomplete line in buffer
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        
+                        switch (data.type) {
+                            case 'start':
+                                statusEl.textContent = data.message;
+                                total = data.total || total;
+                                break;
+                                
+                            case 'status':
+                                statusEl.textContent = data.message;
+                                break;
+                                
+                            case 'progress':
+                                current = data.current || current;
+                                processed = data.processed || processed;
+                                failed = data.failed || failed;
+                                
+                                const percentage = total > 0 ? (current / total) * 100 : 0;
+                                progressBar.style.width = `${percentage}%`;
+                                progressEl.textContent = `${current} / ${total}`;
+                                statusEl.textContent = `Extracting... ${processed} processed, ${failed} failed`;
+                                break;
+                                
+                            case 'note':
+                                processed = data.processed || processed;
+                                failed = data.failed || failed;
+                                
+                                // Add note to list with extracted tags
+                                const noteItem = document.createElement('div');
+                                noteItem.className = 'flex items-start gap-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg animate-fade-in';
+                                
+                                const extractedTags = data.extracted_categories || [];
+                                const allTags = data.all_categories || [];
+                                const tagsHtml = extractedTags.length > 0 ? `
+                                    <div class="mt-2 flex flex-wrap gap-1.5">
+                                        ${extractedTags.map(tag => `
+                                            <span class="px-2 py-0.5 text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded">
+                                                ${escapeHtml(tag)}
+                                            </span>
+                                        `).join('')}
+                                    </div>
+                                ` : '<span class="text-xs text-slate-500 dark:text-slate-400">No new tags extracted</span>';
+                                
+                                noteItem.innerHTML = `
+                                    <svg class="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="text-sm font-medium text-slate-900 dark:text-slate-100">${escapeHtml(data.note_title || 'Untitled')}</div>
+                                        <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">Extracted ${extractedTags.length} tag(s)</div>
+                                        ${tagsHtml}
+                                    </div>
+                                `;
+                                notesList.insertBefore(noteItem, notesList.firstChild);
+                                
+                                // Update notes list in sidebar if note exists
+                                const noteIndex = notes.findIndex(n => n.id === data.note_id);
+                                if (noteIndex >= 0 && data.note) {
+                                    notes[noteIndex] = data.note;
+                                    renderNotesList();
+                                }
+                                break;
+                                
+                            case 'error':
+                                failed = data.failed || failed;
+                                
+                                const errorItem = document.createElement('div');
+                                errorItem.className = 'flex items-start gap-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg animate-fade-in';
+                                errorItem.innerHTML = `
+                                    <svg class="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="text-sm font-medium text-slate-900 dark:text-slate-100">${escapeHtml(data.note_title || 'Unknown')}</div>
+                                        <div class="text-xs text-red-600 dark:text-red-400 mt-1">${escapeHtml(data.error)}</div>
+                                    </div>
+                                `;
+                                notesList.insertBefore(errorItem, notesList.firstChild);
+                                break;
+                                
+                            case 'complete':
+                                statusEl.textContent = data.message || 'Extraction complete!';
+                                progressBar.style.width = '100%';
+                                progressEl.textContent = `${total} / ${total}`;
+                                
+                                setTimeout(() => {
+                                    closeExtractTagsModal();
+                                    loadNotes();
+                                    loadCategories();
+                                }, 2000);
+                                break;
+                        }
+                    } catch (e) {
+                        console.error('Error parsing SSE data:', e);
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Failed to extract tags:', error);
+        statusEl.textContent = 'Extraction failed. Please try again.';
+        setTimeout(() => {
+            closeExtractTagsModal();
+        }, 3000);
+    }
+}
+
+function filterNotes() {
+    let filtered = notes;
+    
+    // Filter by search query
+    if (searchQuery) {
+        filtered = filtered.filter(note => {
+            const title = (note.title || '').toLowerCase();
+            const content = stripHtml(note.content || '').toLowerCase();
+            return title.includes(searchQuery) || content.includes(searchQuery);
+        });
+    }
+    
+    // Filter by selected categories (AND logic - note must have ALL selected categories)
+    if (selectedCategories.size > 0) {
+        filtered = filtered.filter(note => {
+            if (!note.categories || note.categories.length === 0) {
+                return false;
+            }
+            // Check if note has ALL selected categories
+            return Array.from(selectedCategories).every(cat => note.categories.includes(cat));
+        });
+    }
+    
+    return filtered;
+}
+
+function updateNotesCountIndicator(filteredCount, totalCount, hasFilters) {
+    const indicator = document.getElementById('notes-count-indicator');
+    const countText = document.getElementById('notes-count-text');
+    
+    if (!indicator || !countText) return;
+    
+    if (hasFilters && filteredCount !== totalCount) {
+        countText.textContent = `Showing ${filteredCount} of ${totalCount} note${totalCount !== 1 ? 's' : ''}`;
+        indicator.classList.remove('hidden');
+    } else {
+        indicator.classList.add('hidden');
+    }
 }
 
 function renderNotesList() {
@@ -318,9 +757,21 @@ function renderNotesList() {
     listEl.innerHTML = '';
     
     const filteredNotes = filterNotes();
+    const totalNotes = notes.length;
+    const hasFilters = selectedCategories.size > 0 || searchQuery;
+    
+    // Update count indicator
+    updateNotesCountIndicator(filteredNotes.length, totalNotes, hasFilters);
     
     if (filteredNotes.length === 0) {
-        const message = searchQuery ? 'No notes match your search' : 'No notes yet';
+        let message = 'No notes yet';
+        if (searchQuery && selectedCategories.size > 0) {
+            message = 'No notes match your search and selected tags';
+        } else if (searchQuery) {
+            message = 'No notes match your search';
+        } else if (selectedCategories.size > 0) {
+            message = 'No notes match the selected tags';
+        }
         listEl.innerHTML = `<div class="p-4 text-sm text-slate-500 dark:text-slate-400 text-center">${message}</div>`;
         return;
     }
@@ -339,6 +790,7 @@ function renderNotesList() {
         
         const title = note.title || 'Untitled';
         const preview = note.content ? stripHtml(note.content).substring(0, 60) + (stripHtml(note.content).length > 60 ? '...' : '') : '';
+        const noteCategories = note.categories || [];
         
         // Only show checkbox in multi-select mode
         const checkboxHtml = multiSelectMode ? `
@@ -350,11 +802,24 @@ function renderNotesList() {
             >
         ` : '';
         
+        // Category badges
+        const categoryBadges = noteCategories.length > 0 ? `
+            <div class="flex items-center gap-1 flex-wrap mt-1">
+                ${noteCategories.slice(0, 3).map(cat => `
+                    <span class="px-1.5 py-0.5 text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded">
+                        ${escapeHtml(cat)}
+                    </span>
+                `).join('')}
+                ${noteCategories.length > 3 ? `<span class="text-xs text-slate-400 dark:text-slate-500">+${noteCategories.length - 3}</span>` : ''}
+            </div>
+        ` : '';
+        
         item.innerHTML = `
             ${checkboxHtml}
             <div class="flex-1 min-w-0">
                 <div class="font-semibold text-slate-900 dark:text-slate-100 text-sm mb-1">${escapeHtml(title)}</div>
                 <div class="text-xs text-slate-500 dark:text-slate-400">${escapeHtml(preview)}</div>
+                ${categoryBadges}
             </div>
             <button 
                 onclick="event.stopPropagation(); deleteNote('${note.id}')" 
@@ -453,6 +918,8 @@ function selectNote(noteId) {
     if (note) {
         document.getElementById('note-title').value = note.title || '';
         document.getElementById('note-content').value = stripHtml(note.content || '');
+        currentNoteCategories = note.categories ? [...note.categories] : [];
+        renderNoteCategories();
         document.getElementById('empty-state').classList.add('hidden');
         document.getElementById('editor').classList.remove('hidden');
         updateSaveStatus('waiting');
@@ -477,6 +944,8 @@ function createNote() {
     
     currentNoteId = null;
     pendingNoteId = null; // Clear pending note ID when creating a new note
+    currentNoteCategories = [];
+    renderNoteCategories();
     document.getElementById('note-title').value = '';
     document.getElementById('note-content').value = '';
     document.getElementById('empty-state').classList.add('hidden');
@@ -502,6 +971,8 @@ function cancelEdit() {
     
     currentNoteId = null;
     pendingNoteId = null; // Clear pending note ID when canceling
+    currentNoteCategories = [];
+    renderNoteCategories();
     document.getElementById('empty-state').classList.remove('hidden');
     document.getElementById('editor').classList.add('hidden');
     updateSaveStatus('waiting');
@@ -587,7 +1058,7 @@ async function autosaveNote() {
             // Update existing note
             note = await apiCall(`/api/notes/${noteIdToUse}`, {
                 method: 'PUT',
-                body: JSON.stringify({ title: saveTitle, content })
+                body: JSON.stringify({ title: saveTitle, content, categories: currentNoteCategories })
             });
             
             // Handle case where update creates a new note (new ID) instead of updating
@@ -608,7 +1079,7 @@ async function autosaveNote() {
             // Create new note
             note = await apiCall('/api/notes', {
                 method: 'POST',
-                body: JSON.stringify({ title: saveTitle, content })
+                body: JSON.stringify({ title: saveTitle, content, categories: currentNoteCategories })
             });
             // Set both currentNoteId and pendingNoteId immediately
             currentNoteId = note.id;
@@ -668,12 +1139,12 @@ async function saveNote() {
         if (currentNoteId) {
             note = await apiCall(`/api/notes/${currentNoteId}`, {
                 method: 'PUT',
-                body: JSON.stringify({ title, content })
+                body: JSON.stringify({ title, content, categories: currentNoteCategories })
             });
         } else {
             note = await apiCall('/api/notes', {
                 method: 'POST',
-                body: JSON.stringify({ title, content })
+                body: JSON.stringify({ title, content, categories: currentNoteCategories })
             });
             currentNoteId = note.id;
         }

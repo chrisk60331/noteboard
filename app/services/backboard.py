@@ -55,6 +55,51 @@ class BackboardClient:
         self._current_assistant_id = None  # Track current assistant for thread management
         self.chunker = SemanticChunker(max_chunk_size=3800)
     
+    def _add_app_assistant_id(self, assistant_id: str):
+        """Add an assistant ID to the app_assistant_ids list in settings"""
+        try:
+            from app.config import SETTINGS_FILE
+            import json
+            
+            # Load existing settings
+            current_settings = {}
+            if SETTINGS_FILE.exists():
+                with open(SETTINGS_FILE, "r") as f:
+                    current_settings = json.load(f)
+            
+            # Get current list
+            app_assistant_ids = current_settings.get("app_assistant_ids", [])
+            if not isinstance(app_assistant_ids, list):
+                app_assistant_ids = []
+            
+            # Add assistant_id if not already present
+            assistant_id_str = str(assistant_id)
+            if assistant_id_str not in app_assistant_ids:
+                app_assistant_ids.append(assistant_id_str)
+                current_settings["app_assistant_ids"] = app_assistant_ids
+                
+                # Save to file
+                SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+                with open(SETTINGS_FILE, "w") as f:
+                    json.dump(current_settings, f, indent=2)
+        except Exception:
+            # Silently fail - this is not critical
+            pass
+    
+    def _get_app_assistant_ids(self) -> list:
+        """Get list of assistant IDs created by this app"""
+        try:
+            from app.config import SETTINGS_FILE
+            import json
+            
+            if SETTINGS_FILE.exists():
+                with open(SETTINGS_FILE, "r") as f:
+                    settings_data = json.load(f)
+                    return settings_data.get("app_assistant_ids", [])
+        except Exception:
+            pass
+        return []
+    
     def _get_or_create_default_assistant(self) -> str:
         """Get or create a default assistant for storing notes"""
         # If assistant_id was provided during initialization, use it
@@ -92,7 +137,10 @@ class BackboardClient:
                             # The key is "assistant_id" not "id"!
                             assistant_id = assistant_dict.get('assistant_id', '') if isinstance(assistant_dict, dict) else getattr(assistant, 'assistant_id', '')
                             if assistant_id:
-                                self._default_assistant_id = str(assistant_id)
+                                assistant_id_str = str(assistant_id)
+                                self._default_assistant_id = assistant_id_str
+                                # Add to app_assistant_ids if not already present
+                                self._add_app_assistant_id(assistant_id_str)
                                 return self._default_assistant_id
         except Exception as e:
             pass
@@ -114,7 +162,10 @@ class BackboardClient:
                 # The key is "assistant_id" not "id"!
                 assistant_id = assistant_dict.get('assistant_id', '') if isinstance(assistant_dict, dict) else getattr(assistant, 'assistant_id', '')
                 if assistant_id:
-                    self._default_assistant_id = str(assistant_id)
+                    assistant_id_str = str(assistant_id)
+                    self._default_assistant_id = assistant_id_str
+                    # Add to app_assistant_ids
+                    self._add_app_assistant_id(assistant_id_str)
                     return self._default_assistant_id
         except Exception as e:
             raise RuntimeError(f"Failed to create default assistant: {str(e)}")
@@ -148,6 +199,11 @@ class BackboardClient:
                 # Use semantic chunking to split large content
                 chunks = self.chunker.chunk_text(combined_content, title=note.title)
                 
+                # Prepare metadata with categories if provided
+                metadata = None
+                if note.categories:
+                    metadata = {"categories": note.categories}
+                
                 # Call add_memory with assistant_id and content (signature: add_memory(assistant_id, content, metadata=None))
                 # SDK methods are async, so we need to use asyncio to run them
                 import asyncio
@@ -163,9 +219,21 @@ class BackboardClient:
                 # Create memories for all chunks
                 results = []
                 for chunk in chunks:
-                    memory_result = loop.run_until_complete(
-                        self.sdk_client.add_memory(assistant_id, chunk.content)
-                    )
+                    # Try passing metadata as third parameter
+                    try:
+                        if metadata:
+                            memory_result = loop.run_until_complete(
+                                self.sdk_client.add_memory(assistant_id, chunk.content, metadata=metadata)
+                            )
+                        else:
+                            memory_result = loop.run_until_complete(
+                                self.sdk_client.add_memory(assistant_id, chunk.content)
+                            )
+                    except TypeError:
+                        # If metadata parameter doesn't work, try without it
+                        memory_result = loop.run_until_complete(
+                            self.sdk_client.add_memory(assistant_id, chunk.content)
+                        )
                     results.append(memory_result)
                 
                 # Return the first chunk as the primary note
@@ -273,6 +341,8 @@ class BackboardClient:
             data["title"] = note_update.title
         if note_update.content is not None:
             data["content"] = note_update.content
+        if note_update.categories is not None:
+            data["categories"] = note_update.categories
         
         if not data:
             return self.get_note(note_id)
@@ -294,6 +364,11 @@ class BackboardClient:
                 # Use semantic chunking to split large content
                 chunks = self.chunker.chunk_text(combined_content, title=title)
                 
+                # Prepare metadata with categories if provided
+                metadata = None
+                if data.get("categories"):
+                    metadata = {"categories": data["categories"]}
+                
                 # SDK methods are async
                 import asyncio
                 try:
@@ -308,9 +383,21 @@ class BackboardClient:
                 # Create memories for all chunks
                 results = []
                 for chunk in chunks:
-                    memory_result = loop.run_until_complete(
-                        self.sdk_client.add_memory(assistant_id, chunk.content)
-                    )
+                    # Try passing metadata as third parameter
+                    try:
+                        if metadata:
+                            memory_result = loop.run_until_complete(
+                                self.sdk_client.add_memory(assistant_id, chunk.content, metadata=metadata)
+                            )
+                        else:
+                            memory_result = loop.run_until_complete(
+                                self.sdk_client.add_memory(assistant_id, chunk.content)
+                            )
+                    except TypeError:
+                        # If metadata parameter doesn't work, try without it
+                        memory_result = loop.run_until_complete(
+                            self.sdk_client.add_memory(assistant_id, chunk.content)
+                        )
                     results.append(memory_result)
                 
                 # Return the first chunk as the primary note
@@ -496,9 +583,18 @@ class BackboardClient:
             search: Optional search query for filtering threads (future: will search thread content)
         """
         try:
+            # Get list of app-owned assistant IDs
+            app_assistant_ids = self._get_app_assistant_ids()
+            
             # Get assistant_id (use provided one or default)
             if not assistant_id:
                 assistant_id = self._get_or_create_default_assistant()
+            
+            # Only filter threads if app_assistant_ids has items (for backward compatibility, show all if empty)
+            assistant_id_str = str(assistant_id)
+            if app_assistant_ids and assistant_id_str not in app_assistant_ids:
+                # Assistant not owned by this app, return empty list
+                return []
             
             # SDK methods are async, so we need to use asyncio to run them
             import asyncio
@@ -615,6 +711,13 @@ class BackboardClient:
                     # Truncate preview if found
                     if preview_text:
                         preview_text = str(preview_text).strip()
+                        
+                        # Exclude tagging request threads - they start with a specific prompt
+                        tagging_prompt_start = "Analyze this note and suggest 3-5 relevant category tags"
+                        if preview_text.startswith(tagging_prompt_start):
+                            # Skip this thread - it's a tagging request
+                            continue
+                        
                         if len(preview_text) > 100:
                             preview_text = preview_text[:100] + '...'
                     
@@ -628,18 +731,29 @@ class BackboardClient:
             # Fetch first message for each thread if preview_text is not available
             # Only fetch for threads without preview_text to avoid unnecessary API calls
             import logging
+            threads_to_remove = []
             for thread in threads:
                 if not thread.get('preview_text'):
                     try:
                         preview = self._get_thread_preview(thread['thread_id'], loop)
                         if preview:
-                            thread['preview_text'] = preview
+                            preview_text = str(preview).strip()
+                            # Exclude tagging request threads
+                            tagging_prompt_start = "Analyze this note and suggest 3-5 relevant category tags"
+                            if preview_text.startswith(tagging_prompt_start):
+                                # Mark this thread for removal - it's a tagging request
+                                threads_to_remove.append(thread)
+                                continue
+                            thread['preview_text'] = preview_text
                         else:
                             logging.debug(f"No preview found for thread {thread['thread_id']}")
                     except Exception as e:
                         logging.debug(f"Could not fetch preview for thread {thread['thread_id']}: {str(e)}")
                         # Continue without preview if fetch fails
                         pass
+            
+            # Remove tagging request threads
+            threads = [t for t in threads if t not in threads_to_remove]
             
             # Apply search filter if provided (currently filters by thread_id, can be extended for content search)
             if search:
@@ -860,7 +974,7 @@ class BackboardClient:
             logging.error(f"Error getting thread messages: {str(e)}", exc_info=True)
             raise RuntimeError(f"Failed to get thread messages: {str(e)}")
     
-    def chat(self, message: str, context_notes: Optional[List[str]] = None, assistant_id: Optional[str] = None, thread_id: Optional[str] = None) -> dict:
+    def chat(self, message: str, context_notes: Optional[List[str]] = None, assistant_id: Optional[str] = None, thread_id: Optional[str] = None, categories: Optional[List[str]] = None) -> dict:
         """Send a chat message to the LLM with optional note context
         
         Args:
@@ -868,6 +982,7 @@ class BackboardClient:
             context_notes: Optional list of note IDs for context
             assistant_id: Optional assistant ID (uses default if not provided)
             thread_id: Optional thread ID to continue existing thread (creates new if not provided)
+            categories: Optional list of categories to filter memories (notes must have ALL specified categories)
         
         Returns:
             dict with 'response' and 'thread_id' keys
@@ -898,6 +1013,26 @@ class BackboardClient:
             except RuntimeError:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
+            
+            # If categories are specified, filter memories by getting notes with those categories
+            # and using their IDs as context_notes
+            if categories:
+                # Get all notes and filter by categories
+                all_notes = self.list_notes()
+                filtered_note_ids = []
+                for note in all_notes:
+                    if note.categories:
+                        # Check if note has ALL specified categories
+                        if all(cat in note.categories for cat in categories):
+                            filtered_note_ids.append(note.id)
+                
+                # Use filtered note IDs as context if we have any
+                if filtered_note_ids:
+                    # Merge with existing context_notes if provided
+                    if context_notes:
+                        context_notes = list(set(context_notes + filtered_note_ids))
+                    else:
+                        context_notes = filtered_note_ids
             
             # Prepare add_message parameters
             # According to the quickstart: add_message(thread_id=..., content=..., memory="Auto", stream=True)
@@ -973,7 +1108,7 @@ class BackboardClient:
             
             result = self.update_note(
                 note.id,
-                NoteUpdate(title=note.title, content=note.content)
+                NoteUpdate(title=note.title, content=note.content, categories=note.categories)
             )
             
             return result
@@ -981,7 +1116,7 @@ class BackboardClient:
             # Create if new
             
             result = self.create_note(
-                NoteCreate(title=note.title, content=note.content)
+                NoteCreate(title=note.title, content=note.content, categories=note.categories)
             )
             
             return result
@@ -997,7 +1132,8 @@ class BackboardClient:
                 title="Untitled",
                 content="",
                 created_at=datetime.now(),
-                updated_at=datetime.now()
+                updated_at=datetime.now(),
+                categories=[]
             )
         
         # Handle different SDK result formats
@@ -1026,12 +1162,21 @@ class BackboardClient:
                     # Only title, no content
                     content = ""
             
+            # Extract categories from metadata
+            categories = []
+            metadata = result.get("metadata") or result.get("meta") or {}
+            if isinstance(metadata, dict):
+                categories = metadata.get("categories", [])
+            if not isinstance(categories, list):
+                categories = []
+            
             return Note(
                 id=str(memory_id),
                 title=title or "Untitled",
                 content=content,
                 created_at=self._parse_datetime(result.get("created_at")),
-                updated_at=self._parse_datetime(result.get("updated_at"))
+                updated_at=self._parse_datetime(result.get("updated_at")),
+                categories=categories
             )
         elif hasattr(result, '__dict__'):
             # Object with attributes
@@ -1058,12 +1203,23 @@ class BackboardClient:
                     # Only title, no content
                     content = ""
             
+            # Extract categories from metadata
+            categories = []
+            metadata = getattr(result, 'metadata', None) or getattr(result, 'meta', None) or {}
+            if isinstance(metadata, dict):
+                categories = metadata.get("categories", [])
+            elif hasattr(metadata, 'categories'):
+                categories = metadata.categories
+            if not isinstance(categories, list):
+                categories = []
+            
             return Note(
                 id=str(memory_id),
                 title=title or "Untitled",
                 content=content,
                 created_at=self._parse_datetime(getattr(result, 'created_at', None)),
-                updated_at=self._parse_datetime(getattr(result, 'updated_at', None))
+                updated_at=self._parse_datetime(getattr(result, 'updated_at', None)),
+                categories=categories
             )
         else:
             # Fallback - try to access as dict-like or convert to string
@@ -1088,12 +1244,25 @@ class BackboardClient:
                     # Only title, no content
                     content = ""
             
+            # Extract categories from metadata
+            categories = []
+            metadata = result.get("metadata") if hasattr(result, 'get') else (getattr(result, 'metadata', None) if hasattr(result, 'metadata') else None)
+            if not metadata:
+                metadata = result.get("meta") if hasattr(result, 'get') else (getattr(result, 'meta', None) if hasattr(result, 'meta') else {})
+            if isinstance(metadata, dict):
+                categories = metadata.get("categories", [])
+            elif hasattr(metadata, 'categories'):
+                categories = metadata.categories
+            if not isinstance(categories, list):
+                categories = []
+            
             return Note(
                 id=str(memory_id),
                 title=title or "Untitled",
                 content=content,
                 created_at=self._parse_datetime(result.get("created_at") if hasattr(result, 'get') else (getattr(result, 'created_at', None) if hasattr(result, 'created_at') else None)),
-                updated_at=self._parse_datetime(result.get("updated_at") if hasattr(result, 'get') else (getattr(result, 'updated_at', None) if hasattr(result, 'updated_at') else None))
+                updated_at=self._parse_datetime(result.get("updated_at") if hasattr(result, 'get') else (getattr(result, 'updated_at', None) if hasattr(result, 'updated_at') else None)),
+                categories=categories
             )
     
     def _parse_datetime(self, dt_str: Optional[str]) -> datetime:

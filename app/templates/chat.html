@@ -5,7 +5,26 @@
 {% block content %}
 <div class="px-4 py-6 sm:px-0">
     <div class="max-w-7xl mx-auto">
-        <div class="flex gap-4" style="height: calc(100vh - 8rem);">
+        <!-- Tag Filter Bar -->
+        <div class="mb-4 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm transition-colors duration-200">
+            <div class="flex items-center gap-3 flex-wrap">
+                <span class="text-sm font-medium text-gray-700 dark:text-slate-300">Filter chat memories by tags:</span>
+                <div id="chat-tag-filter-container" class="flex items-center gap-2 flex-wrap flex-1">
+                    <!-- Tags will be loaded here -->
+                </div>
+            </div>
+            <!-- Filter Active Indicator -->
+            <div id="chat-filter-indicator" class="hidden mt-3 pt-3 border-t border-gray-200 dark:border-slate-700">
+                <div class="flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
+                    </svg>
+                    <span>Filtering memories by: <span id="chat-filter-tags-list" class="font-medium"></span></span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="flex gap-4" style="height: calc(100vh - 12rem);">
             <!-- Threads Panel -->
             <div class="w-80 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 flex flex-col transition-colors duration-200">
                 <!-- Threads Header -->
@@ -122,6 +141,8 @@ let allThreads = []; // Store all threads for filtering
 let selectedThreads = new Set(); // Track selected threads for multi-select
 let multiSelectMode = false; // Track if we're in multi-select mode
 let currentThreadId = null; // Track currently selected thread
+let categories = []; // All available categories
+let selectedChatCategories = new Set(); // Selected categories for filtering chat memories
 
 document.addEventListener('DOMContentLoaded', async () => {
     const form = document.getElementById('chat-form');
@@ -133,6 +154,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Load assistants
     await loadAssistants();
+    
+    // Load categories
+    loadCategories();
     
     // Handle assistant selection change
     assistantSelect.addEventListener('change', (e) => {
@@ -246,6 +270,10 @@ async function sendMessage(message) {
         // If we have a current thread, continue using it
         if (currentThreadId) {
             requestBody.thread_id = currentThreadId;
+        }
+        // Add category filter if categories are selected
+        if (selectedChatCategories.size > 0) {
+            requestBody.categories = Array.from(selectedChatCategories);
         }
         
         const response = await apiCall('/api/chat', {
@@ -605,6 +633,72 @@ async function deleteSelectedThreads() {
         selectedThreads.clear();
         exitMultiSelectMode();
     }
+}
+
+async function loadCategories() {
+    try {
+        const data = await apiCall('/api/categories');
+        categories = data.map(cat => cat.name);
+        renderChatTagFilterBar();
+    } catch (error) {
+        console.error('Failed to load categories:', error);
+    }
+}
+
+function renderChatTagFilterBar() {
+    const container = document.getElementById('chat-tag-filter-container');
+    if (!container) return;
+    
+    if (categories.length === 0) {
+        container.innerHTML = '<span class="text-sm text-gray-400 dark:text-slate-500">No categories yet</span>';
+        // Hide filter indicator when no categories
+        const indicator = document.getElementById('chat-filter-indicator');
+        if (indicator) indicator.classList.add('hidden');
+        return;
+    }
+    
+    container.innerHTML = categories.map(cat => {
+        const isSelected = selectedChatCategories.has(cat);
+        return `
+            <button 
+                onclick="toggleChatCategoryFilter('${escapeHtml(cat)}')" 
+                class="px-3 py-1.5 text-xs rounded-lg font-medium transition-all duration-200 ${
+                    isSelected 
+                        ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md' 
+                        : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                }"
+            >
+                ${escapeHtml(cat)}
+            </button>
+        `;
+    }).join('');
+    
+    // Update filter indicator
+    updateChatFilterIndicator();
+}
+
+function updateChatFilterIndicator() {
+    const indicator = document.getElementById('chat-filter-indicator');
+    const tagsList = document.getElementById('chat-filter-tags-list');
+    
+    if (!indicator || !tagsList) return;
+    
+    if (selectedChatCategories.size > 0) {
+        const selectedTags = Array.from(selectedChatCategories).map(cat => escapeHtml(cat));
+        tagsList.textContent = selectedTags.join(', ');
+        indicator.classList.remove('hidden');
+    } else {
+        indicator.classList.add('hidden');
+    }
+}
+
+function toggleChatCategoryFilter(category) {
+    if (selectedChatCategories.has(category)) {
+        selectedChatCategories.delete(category);
+    } else {
+        selectedChatCategories.add(category);
+    }
+    renderChatTagFilterBar();
 }
 </script>
 {% endblock %}

@@ -14,6 +14,48 @@ def invalidate_assistant_cache():
     _assistant_cache = None
 
 
+def get_app_assistant_ids() -> list:
+    """Get list of assistant IDs created by this app"""
+    try:
+        if SETTINGS_FILE.exists():
+            with open(SETTINGS_FILE, "r") as f:
+                settings_data = json.load(f)
+                return settings_data.get("app_assistant_ids", [])
+    except:
+        pass
+    return []
+
+
+def add_app_assistant_id(assistant_id: str):
+    """Add an assistant ID to the app_assistant_ids list"""
+    try:
+        # Load existing settings
+        current_settings = {}
+        if SETTINGS_FILE.exists():
+            with open(SETTINGS_FILE, "r") as f:
+                current_settings = json.load(f)
+        
+        # Get current list
+        app_assistant_ids = current_settings.get("app_assistant_ids", [])
+        if not isinstance(app_assistant_ids, list):
+            app_assistant_ids = []
+        
+        # Add assistant_id if not already present
+        assistant_id_str = str(assistant_id)
+        if assistant_id_str not in app_assistant_ids:
+            app_assistant_ids.append(assistant_id_str)
+            current_settings["app_assistant_ids"] = app_assistant_ids
+            
+            # Save to file
+            SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with open(SETTINGS_FILE, "w") as f:
+                json.dump(current_settings, f, indent=2)
+    except Exception as e:
+        # Log error but don't fail - this is not critical
+        import logging
+        logging.warning(f"Failed to save app_assistant_id: {str(e)}")
+
+
 def get_backboard_client() -> BackboardClient:
     """Get Backboard client from settings"""
     try:
@@ -72,6 +114,16 @@ def update_settings():
         update_dict = settings_update.model_dump(exclude_unset=True)
         current_settings.update(update_dict)
         
+        # If assistant_id is being set, add it to app_assistant_ids if not already present
+        if "assistant_id" in update_dict and update_dict["assistant_id"]:
+            app_assistant_ids = current_settings.get("app_assistant_ids", [])
+            if not isinstance(app_assistant_ids, list):
+                app_assistant_ids = []
+            assistant_id_str = str(update_dict["assistant_id"])
+            if assistant_id_str not in app_assistant_ids:
+                app_assistant_ids.append(assistant_id_str)
+                current_settings["app_assistant_ids"] = app_assistant_ids
+        
         # Save to file
         SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(SETTINGS_FILE, "w") as f:
@@ -110,7 +162,11 @@ def list_assistants():
             
             assistants = loop.run_until_complete(client.sdk_client.list_assistants())
             
+            # Get list of app-owned assistant IDs
+            app_assistant_ids = get_app_assistant_ids()
+            
             # Convert to list of dicts with assistant_id, name, and memory_count
+            # Filter to only show assistants created by this app (if app_assistant_ids is not empty)
             result = []
             if isinstance(assistants, list):
                 for assistant in assistants:
@@ -122,15 +178,21 @@ def list_assistants():
                         continue
                     
                     assistant_id = assistant_dict.get('assistant_id') or assistant_dict.get('id', '')
+                    assistant_id_str = str(assistant_id)
+                    
+                    # Only filter if app_assistant_ids has items (for backward compatibility, show all if empty)
+                    if app_assistant_ids and assistant_id_str not in app_assistant_ids:
+                        continue
+                    
                     name = assistant_dict.get('name', 'Untitled')
                     
                     # Get memory count for this assistant
                     memory_count = 0
                     if assistant_id:
-                        memory_count = client.get_memory_count(str(assistant_id))
+                        memory_count = client.get_memory_count(assistant_id_str)
                     
                     result.append({
-                        'assistant_id': str(assistant_id),
+                        'assistant_id': assistant_id_str,
                         'name': name,
                         'memory_count': memory_count
                     })
@@ -183,13 +245,17 @@ def create_assistant():
                 return jsonify({"error": "Invalid assistant response format"}), 500
             
             assistant_id = assistant_dict.get('assistant_id') or assistant_dict.get('id', '')
+            assistant_id_str = str(assistant_id)
             assistant_name = assistant_dict.get('name', name)
+            
+            # Add this assistant ID to app_assistant_ids
+            add_app_assistant_id(assistant_id_str)
             
             # Invalidate cache when a new assistant is created
             _assistant_cache = None
             
             return jsonify({
-                'assistant_id': str(assistant_id),
+                'assistant_id': assistant_id_str,
                 'name': assistant_name
             }), 201
         else:
