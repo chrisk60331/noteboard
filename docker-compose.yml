@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: bb_notes
+    ports:
+      - "9000:9000"
+    environment:
+      - FLASK_ENV=${FLASK_ENV:-development}
+      - BACKBOARD_API_KEY=${BACKBOARD_API_KEY}
+      - BACKBOARD_BASE_URL=${BACKBOARD_BASE_URL:-https://app.backboard.io/api}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-gpt-5-chat-latest}
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+    volumes:
+      - ./settings.json:/app/settings.json
+    restart: unless-stopped

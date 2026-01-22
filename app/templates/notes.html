@@ -1,0 +1,1014 @@
+{% extends "base.html" %}
+
+{% block title %}Notes - NoteBoard{% endblock %}
+
+{% block content %}
+<div class="px-4 py-6 sm:px-0">
+    <div class="flex h-[calc(100vh-10rem)] border border-slate-200/50 dark:border-slate-700/50 rounded-2xl bg-white/60 dark:bg-slate-800/60 backdrop-blur-xl shadow-xl overflow-hidden transition-colors duration-200">
+        <!-- Sidebar -->
+        <div class="w-72 border-r border-slate-200/50 dark:border-slate-700/50 flex flex-col bg-gradient-to-b from-white to-slate-50/50 dark:from-slate-800 dark:to-slate-900/50 transition-colors duration-200">
+            <div class="p-5 border-b border-slate-200/50 dark:border-slate-700/50">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-bold text-slate-900 dark:text-slate-100">Notes</h2>
+                    <div class="relative">
+                        <button onclick="toggleImportMenu()" class="import-btn text-sm text-white bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-2 rounded-lg hover:from-indigo-700 hover:to-purple-700 font-medium shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                            </svg>
+                            Import
+                        </button>
+                        <div id="import-menu" class="hidden absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200/50 dark:border-slate-700/50 py-2 z-50 transition-colors duration-200">
+                            <button onclick="importFromSource('apple')" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3">
+                                <svg class="w-5 h-5 text-slate-400 dark:text-slate-500" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M10 2L3 7v11c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V7l-7-5z"/>
+                                </svg>
+                                Apple Notes
+                            </button>
+                            <div class="border-t border-slate-100 dark:border-slate-700 my-1"></div>
+                            <div class="px-4 py-2 text-xs text-slate-400 dark:text-slate-500">More sources coming soon</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <input 
+                        type="text" 
+                        id="search-notes" 
+                        placeholder="Search notes..." 
+                        class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-900 dark:text-slate-100 dark:bg-slate-700 placeholder-slate-400 dark:placeholder-slate-500"
+                    >
+                </div>
+                <div id="multi-select-controls" class="hidden mb-3">
+                    <div class="flex gap-2">
+                        <button onclick="exitMultiSelectMode()" class="flex-1 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg font-medium transition-colors">
+                            Cancel
+                        </button>
+                        <button onclick="deleteSelectedNotes()" class="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 text-sm font-medium shadow-sm hover:shadow-md transition-all duration-200 inline-flex items-center justify-center gap-2 whitespace-nowrap">
+                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                            <span>Delete</span>
+                            <span id="selected-count" class="font-semibold">0</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="createNote()" class="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 py-2.5 rounded-lg hover:from-indigo-700 hover:to-purple-700 text-sm font-medium shadow-sm hover:shadow-md transition-all duration-200">
+                        New Note
+                    </button>
+                    <button onclick="enterMultiSelectMode()" id="multi-select-btn" class="px-4 py-2.5 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors border border-slate-300 dark:border-slate-600" title="Select multiple notes (Cmd/Ctrl+Click)">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto" id="notes-list">
+                <!-- Notes will be loaded here -->
+            </div>
+        </div>
+        
+        <!-- Editor -->
+        <div class="flex-1 flex flex-col bg-white dark:bg-slate-800 transition-colors duration-200">
+            <div id="empty-state" class="flex-1 flex items-center justify-center text-slate-400 dark:text-slate-500">
+                <div class="text-center">
+                    <svg class="w-16 h-16 mx-auto mb-4 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                    <p class="text-lg font-medium dark:text-slate-300">Select a note or create a new one</p>
+                </div>
+            </div>
+            
+            <div id="editor" class="hidden flex-1 flex flex-col">
+                <div class="p-6 border-b border-slate-200/50 dark:border-slate-700/50 bg-gradient-to-r from-white to-slate-50/30 dark:from-slate-800 dark:to-slate-900/30 transition-colors duration-200">
+                    <div class="flex items-center justify-between gap-4">
+                        <input 
+                            type="text" 
+                            id="note-title" 
+                            placeholder="Note Title" 
+                            class="flex-1 text-2xl font-bold border-none outline-none focus:ring-0 bg-transparent text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
+                        >
+                        <div id="save-status" class="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                            <span id="save-status-text"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex-1 p-6 overflow-y-auto bg-white dark:bg-slate-800 transition-colors duration-200">
+                    <textarea 
+                        id="note-content" 
+                        placeholder="Start writing..." 
+                        class="w-full h-full border-none outline-none resize-none note-editor text-slate-700 dark:text-slate-200 dark:bg-slate-800 placeholder-slate-400 dark:placeholder-slate-500"
+                    ></textarea>
+                </div>
+                <div class="p-4 border-t border-slate-200/50 dark:border-slate-700/50 flex justify-end space-x-3 bg-slate-50/50 dark:bg-slate-900/50 transition-colors duration-200">
+                    <button onclick="cancelEdit()" class="px-5 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors">
+                        Cancel
+                    </button>
+                    <button onclick="saveNote()" class="px-5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 text-sm font-medium shadow-sm hover:shadow-md transition-all duration-200">
+                        Save
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Import Settings Modal -->
+<div id="import-settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden transition-colors duration-200">
+        <div class="p-6 border-b border-slate-200/50 dark:border-slate-700/50 bg-gradient-to-r from-indigo-600 to-purple-600">
+            <div class="flex items-center justify-between">
+                <h3 class="text-xl font-bold text-white">Import Settings</h3>
+                <button onclick="closeImportSettingsModal()" class="text-white/80 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div class="p-6">
+            <div class="mb-4">
+                <p class="text-sm text-slate-600 dark:text-slate-300 mb-4">Limit the number of notes to import for testing. Leave empty to import all notes.</p>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-3">Import position</label>
+                        <div class="flex gap-4">
+                            <label class="flex items-center cursor-pointer">
+                                <input 
+                                    type="radio" 
+                                    name="import-position" 
+                                    value="first" 
+                                    id="import-position-first"
+                                    class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-700"
+                                    checked
+                                >
+                                <span class="ml-2 text-sm text-slate-700 dark:text-slate-200">First N notes</span>
+                            </label>
+                            <label class="flex items-center cursor-pointer">
+                                <input 
+                                    type="radio" 
+                                    name="import-position" 
+                                    value="last" 
+                                    id="import-position-last"
+                                    class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-700"
+                                >
+                                <span class="ml-2 text-sm text-slate-700 dark:text-slate-200">Last N notes</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label for="import-n-count" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+                            Number of notes
+                        </label>
+                        <input 
+                            type="number" 
+                            id="import-n-count" 
+                            min="1" 
+                            placeholder="e.g., 10"
+                            class="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-900 dark:text-slate-100 dark:bg-slate-700"
+                        >
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400" id="import-position-hint">Import only the first N notes</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                <button onclick="closeImportSettingsModal()" class="px-5 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors">
+                    Cancel
+                </button>
+                <button onclick="startImportWithSettings()" class="px-5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 text-sm font-medium shadow-sm hover:shadow-md transition-all duration-200">
+                    Start Import
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Progress Modal -->
+<div id="import-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden transition-colors duration-200">
+        <div class="p-6 border-b border-slate-200/50 dark:border-slate-700/50 bg-gradient-to-r from-indigo-600 to-purple-600">
+            <div class="flex items-center justify-between">
+                <h3 class="text-xl font-bold text-white">Importing Notes</h3>
+                <button onclick="closeImportModal()" class="text-white/80 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div class="p-6">
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-200" id="import-status">Preparing import...</span>
+                    <span class="text-sm font-semibold text-slate-600 dark:text-slate-300" id="import-progress">0 / 0</span>
+                </div>
+                <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-3 overflow-hidden">
+                    <div id="import-progress-bar" class="h-full bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+            <div class="space-y-3 max-h-96 overflow-y-auto" id="import-notes-list">
+                <!-- Imported notes will appear here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentNoteId = null;
+let notes = [];
+let importEventSource = null;
+let autosaveTimeout = null;
+let isSaving = false;
+let pendingNoteId = null; // Track note ID being created/updated by autosave
+let selectedNotes = new Set(); // Track selected notes for multi-select
+let searchQuery = ''; // Track search query
+let searchTimeout = null; // Debounce timeout for search
+let multiSelectMode = false; // Track if we're in multi-select mode
+
+// Load notes on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadNotes();
+    
+    // Set up autosave listeners
+    const titleInput = document.getElementById('note-title');
+    const contentTextarea = document.getElementById('note-content');
+    
+    if (titleInput) {
+        titleInput.addEventListener('input', () => {
+            scheduleAutosave();
+        });
+    }
+    
+    if (contentTextarea) {
+        contentTextarea.addEventListener('input', () => {
+            scheduleAutosave();
+        });
+    }
+    
+    // Set up search listener with debouncing
+    const searchInput = document.getElementById('search-notes');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+            searchTimeout = setTimeout(() => {
+                searchQuery = e.target.value.toLowerCase().trim();
+                renderNotesList();
+            }, 300);
+        });
+    }
+    
+    // Close import menu when clicking outside
+    document.addEventListener('click', (e) => {
+        const menu = document.getElementById('import-menu');
+        const btn = document.querySelector('.import-btn');
+        if (menu && !menu.contains(e.target) && !btn.contains(e.target)) {
+            menu.classList.add('hidden');
+        }
+    });
+    
+    // Update hint when import position changes
+    const firstRadio = document.getElementById('import-position-first');
+    const lastRadio = document.getElementById('import-position-last');
+    if (firstRadio && lastRadio) {
+        firstRadio.addEventListener('change', updateImportPositionHint);
+        lastRadio.addEventListener('change', updateImportPositionHint);
+    }
+});
+
+function toggleImportMenu() {
+    const menu = document.getElementById('import-menu');
+    menu.classList.toggle('hidden');
+}
+
+async function loadNotes() {
+    try {
+        const data = await apiCall('/api/notes');
+        notes = data;
+        // Exit multi-select mode and clear selection when reloading notes
+        if (multiSelectMode) {
+            exitMultiSelectMode();
+        }
+        selectedNotes.clear();
+        renderNotesList();
+    } catch (error) {
+        console.error('Failed to load notes:', error);
+        alert('Failed to load notes: ' + error.message);
+    }
+}
+
+function filterNotes() {
+    if (!searchQuery) {
+        return notes;
+    }
+    
+    return notes.filter(note => {
+        const title = (note.title || '').toLowerCase();
+        const content = stripHtml(note.content || '').toLowerCase();
+        return title.includes(searchQuery) || content.includes(searchQuery);
+    });
+}
+
+function renderNotesList() {
+    const listEl = document.getElementById('notes-list');
+    listEl.innerHTML = '';
+    
+    const filteredNotes = filterNotes();
+    
+    if (filteredNotes.length === 0) {
+        const message = searchQuery ? 'No notes match your search' : 'No notes yet';
+        listEl.innerHTML = `<div class="p-4 text-sm text-slate-500 dark:text-slate-400 text-center">${message}</div>`;
+        return;
+    }
+    
+    filteredNotes.forEach(note => {
+        const item = document.createElement('div');
+        item.className = 'note-list-item group p-4 border-b border-slate-100 dark:border-slate-700 cursor-pointer transition-all duration-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 relative flex items-start' + (multiSelectMode ? ' gap-3' : '');
+        if (note.id === currentNoteId) {
+            item.classList.add('active', 'bg-gradient-to-r', 'from-indigo-50', 'dark:from-indigo-900/30', 'to-purple-50', 'dark:to-purple-900/30', 'border-indigo-200', 'dark:border-indigo-700');
+        }
+        
+        const isSelected = selectedNotes.has(note.id);
+        if (isSelected) {
+            item.classList.add('bg-blue-50', 'dark:bg-blue-900/20');
+        }
+        
+        const title = note.title || 'Untitled';
+        const preview = note.content ? stripHtml(note.content).substring(0, 60) + (stripHtml(note.content).length > 60 ? '...' : '') : '';
+        
+        // Only show checkbox in multi-select mode
+        const checkboxHtml = multiSelectMode ? `
+            <input 
+                type="checkbox" 
+                class="mt-1 w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 rounded cursor-pointer"
+                ${isSelected ? 'checked' : ''}
+                onclick="event.stopPropagation(); toggleNoteSelection('${note.id}')"
+            >
+        ` : '';
+        
+        item.innerHTML = `
+            ${checkboxHtml}
+            <div class="flex-1 min-w-0">
+                <div class="font-semibold text-slate-900 dark:text-slate-100 text-sm mb-1">${escapeHtml(title)}</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400">${escapeHtml(preview)}</div>
+            </div>
+            <button 
+                onclick="event.stopPropagation(); deleteNote('${note.id}')" 
+                class="opacity-30 hover:opacity-100 transition-opacity duration-200 p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 z-10 flex-shrink-0"
+                title="Delete note"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+            </button>
+        `;
+        
+        item.onclick = (e) => {
+            // Don't trigger selection if clicking on checkbox or delete button
+            if (e.target.tagName === 'INPUT' || e.target.closest('button')) {
+                return;
+            }
+            handleNoteClick(note.id, e);
+        };
+        listEl.appendChild(item);
+    });
+    
+    updateBulkDeleteButton();
+}
+
+function enterMultiSelectMode() {
+    multiSelectMode = true;
+    selectedNotes.clear();
+    document.getElementById('multi-select-controls').classList.remove('hidden');
+    document.getElementById('multi-select-btn').classList.add('hidden');
+    renderNotesList();
+}
+
+function exitMultiSelectMode() {
+    multiSelectMode = false;
+    selectedNotes.clear();
+    document.getElementById('multi-select-controls').classList.add('hidden');
+    document.getElementById('multi-select-btn').classList.remove('hidden');
+    renderNotesList();
+}
+
+function handleNoteClick(noteId, event) {
+    if (multiSelectMode) {
+        // In multi-select mode, clicking toggles selection
+        toggleNoteSelection(noteId);
+    } else {
+        // Check if Cmd (Mac) or Ctrl (Windows/Linux) is pressed
+        if (event.metaKey || event.ctrlKey) {
+            // Enter multi-select mode and select this note
+            enterMultiSelectMode();
+            toggleNoteSelection(noteId);
+        } else {
+            selectNote(noteId);
+        }
+    }
+}
+
+function toggleNoteSelection(noteId) {
+    if (selectedNotes.has(noteId)) {
+        selectedNotes.delete(noteId);
+    } else {
+        selectedNotes.add(noteId);
+    }
+    updateBulkDeleteButton();
+    renderNotesList();
+}
+
+function updateBulkDeleteButton() {
+    const container = document.getElementById('multi-select-controls');
+    const countEl = document.getElementById('selected-count');
+    
+    if (multiSelectMode && countEl) {
+        countEl.textContent = selectedNotes.size;
+    }
+}
+
+function selectNote(noteId) {
+    // Exit multi-select mode when selecting a note normally
+    if (multiSelectMode) {
+        exitMultiSelectMode();
+    }
+    
+    // Clear selection when selecting a note normally
+    selectedNotes.clear();
+    
+    // Cancel any pending autosave before switching notes
+    if (autosaveTimeout) {
+        clearTimeout(autosaveTimeout);
+        autosaveTimeout = null;
+    }
+    
+    currentNoteId = noteId;
+    pendingNoteId = null; // Clear pending note ID when selecting an existing note
+    const note = notes.find(n => n.id === noteId);
+    
+    if (note) {
+        document.getElementById('note-title').value = note.title || '';
+        document.getElementById('note-content').value = stripHtml(note.content || '');
+        document.getElementById('empty-state').classList.add('hidden');
+        document.getElementById('editor').classList.remove('hidden');
+        updateSaveStatus('waiting');
+        renderNotesList();
+    }
+}
+
+function createNote() {
+    // Cancel any pending autosave
+    if (autosaveTimeout) {
+        clearTimeout(autosaveTimeout);
+        autosaveTimeout = null;
+    }
+    
+    // Exit multi-select mode when creating new note
+    if (multiSelectMode) {
+        exitMultiSelectMode();
+    }
+    
+    // Clear selection when creating new note
+    selectedNotes.clear();
+    
+    currentNoteId = null;
+    pendingNoteId = null; // Clear pending note ID when creating a new note
+    document.getElementById('note-title').value = '';
+    document.getElementById('note-content').value = '';
+    document.getElementById('empty-state').classList.add('hidden');
+    document.getElementById('editor').classList.remove('hidden');
+    updateSaveStatus('waiting');
+    renderNotesList();
+}
+
+function cancelEdit() {
+    // Cancel any pending autosave
+    if (autosaveTimeout) {
+        clearTimeout(autosaveTimeout);
+        autosaveTimeout = null;
+    }
+    
+    // Exit multi-select mode when canceling edit
+    if (multiSelectMode) {
+        exitMultiSelectMode();
+    }
+    
+    // Clear selection when canceling edit
+    selectedNotes.clear();
+    
+    currentNoteId = null;
+    pendingNoteId = null; // Clear pending note ID when canceling
+    document.getElementById('empty-state').classList.remove('hidden');
+    document.getElementById('editor').classList.add('hidden');
+    updateSaveStatus('waiting');
+    renderNotesList();
+}
+
+function scheduleAutosave() {
+    // Clear existing timeout
+    if (autosaveTimeout) {
+        clearTimeout(autosaveTimeout);
+    }
+    
+    // Only autosave if editor is visible
+    const editor = document.getElementById('editor');
+    if (editor.classList.contains('hidden')) {
+        return;
+    }
+    
+    // Update status to show we're waiting
+    updateSaveStatus('waiting');
+    
+    // Schedule autosave after 1.5 seconds of inactivity
+    autosaveTimeout = setTimeout(() => {
+        autosaveNote();
+    }, 1500);
+}
+
+function updateSaveStatus(status) {
+    const statusText = document.getElementById('save-status-text');
+    if (!statusText) return;
+    
+    switch (status) {
+        case 'waiting':
+            statusText.textContent = '';
+            break;
+        case 'saving':
+            statusText.textContent = 'Saving...';
+            statusText.className = 'text-slate-500 dark:text-slate-400';
+            break;
+        case 'saved':
+            statusText.textContent = 'Saved';
+            statusText.className = 'text-green-600 dark:text-green-400';
+            // Clear "Saved" message after 2 seconds
+            setTimeout(() => {
+                if (statusText.textContent === 'Saved') {
+                    statusText.textContent = '';
+                }
+            }, 2000);
+            break;
+        case 'error':
+            statusText.textContent = 'Save failed';
+            statusText.className = 'text-red-600 dark:text-red-400';
+            break;
+    }
+}
+
+async function autosaveNote() {
+    // Prevent multiple simultaneous saves
+    if (isSaving) {
+        return;
+    }
+    
+    const title = document.getElementById('note-title').value.trim();
+    const content = document.getElementById('note-content').value;
+    
+    // Don't autosave empty notes
+    if (!title && !content) {
+        return;
+    }
+    
+    // Use "Untitled" as default title for autosave
+    const saveTitle = title || 'Untitled';
+    
+    // Determine which note ID to use - prefer currentNoteId, then pendingNoteId
+    const noteIdToUse = currentNoteId || pendingNoteId;
+    
+    isSaving = true;
+    updateSaveStatus('saving');
+    
+    try {
+        let note;
+        if (noteIdToUse) {
+            // Update existing note
+            note = await apiCall(`/api/notes/${noteIdToUse}`, {
+                method: 'PUT',
+                body: JSON.stringify({ title: saveTitle, content })
+            });
+            
+            // Handle case where update creates a new note (new ID) instead of updating
+            // This can happen if the backend can't find the existing note
+            if (note.id !== noteIdToUse) {
+                // Remove the old note from the list to prevent duplicates
+                const oldNoteIndex = notes.findIndex(n => n.id === noteIdToUse);
+                if (oldNoteIndex >= 0) {
+                    notes.splice(oldNoteIndex, 1);
+                }
+            }
+            
+            // Update currentNoteId to the new note ID (in case it changed)
+            currentNoteId = note.id;
+            // Clear pendingNoteId since we've successfully updated
+            pendingNoteId = null;
+        } else {
+            // Create new note
+            note = await apiCall('/api/notes', {
+                method: 'POST',
+                body: JSON.stringify({ title: saveTitle, content })
+            });
+            // Set both currentNoteId and pendingNoteId immediately
+            currentNoteId = note.id;
+            pendingNoteId = note.id;
+        }
+        
+        // Update notes list without reloading (to avoid losing focus)
+        const noteIndex = notes.findIndex(n => n.id === note.id);
+        if (noteIndex >= 0) {
+            // Update existing note in place
+            notes[noteIndex] = note;
+        } else {
+            // Only add if it doesn't already exist (prevent duplicates)
+            const exists = notes.some(n => n.id === note.id);
+            if (!exists) {
+                notes.unshift(note);
+            }
+        }
+        renderNotesList();
+        
+        updateSaveStatus('saved');
+    } catch (error) {
+        console.error('Failed to autosave note:', error);
+        updateSaveStatus('error');
+        // Clear error message after 3 seconds
+        setTimeout(() => {
+            const statusText = document.getElementById('save-status-text');
+            if (statusText && statusText.textContent === 'Save failed') {
+                statusText.textContent = '';
+            }
+        }, 3000);
+    } finally {
+        isSaving = false;
+    }
+}
+
+async function saveNote() {
+    const title = document.getElementById('note-title').value.trim();
+    const content = document.getElementById('note-content').value;
+    
+    if (!title) {
+        alert('Please enter a title');
+        return;
+    }
+    
+    // Cancel any pending autosave
+    if (autosaveTimeout) {
+        clearTimeout(autosaveTimeout);
+        autosaveTimeout = null;
+    }
+    
+    isSaving = true;
+    updateSaveStatus('saving');
+    
+    try {
+        let note;
+        if (currentNoteId) {
+            note = await apiCall(`/api/notes/${currentNoteId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ title, content })
+            });
+        } else {
+            note = await apiCall('/api/notes', {
+                method: 'POST',
+                body: JSON.stringify({ title, content })
+            });
+            currentNoteId = note.id;
+        }
+        
+        await loadNotes();
+        selectNote(note.id);
+        updateSaveStatus('saved');
+    } catch (error) {
+        console.error('Failed to save note:', error);
+        alert('Failed to save note: ' + error.message);
+        updateSaveStatus('error');
+    } finally {
+        isSaving = false;
+    }
+}
+
+let importSettings = {
+    firstN: null,
+    lastN: null
+};
+
+function importFromSource(source) {
+    toggleImportMenu();
+    
+    if (source === 'apple') {
+        showImportSettingsModal();
+    }
+}
+
+function showImportSettingsModal() {
+    const settingsModal = document.getElementById('import-settings-modal');
+    document.getElementById('import-n-count').value = '';
+    document.getElementById('import-position-first').checked = true;
+    updateImportPositionHint();
+    settingsModal.classList.remove('hidden');
+}
+
+function closeImportSettingsModal() {
+    const settingsModal = document.getElementById('import-settings-modal');
+    settingsModal.classList.add('hidden');
+}
+
+function updateImportPositionHint() {
+    const hintEl = document.getElementById('import-position-hint');
+    const isFirst = document.getElementById('import-position-first').checked;
+    hintEl.textContent = isFirst ? 'Import only the first N notes' : 'Import only the last N notes';
+}
+
+function startImportWithSettings() {
+    const nCount = document.getElementById('import-n-count').value;
+    const isFirst = document.getElementById('import-position-first').checked;
+    
+    if (nCount) {
+        const count = parseInt(nCount);
+        if (isFirst) {
+            importSettings.firstN = count;
+            importSettings.lastN = null;
+        } else {
+            importSettings.firstN = null;
+            importSettings.lastN = count;
+        }
+    } else {
+        importSettings.firstN = null;
+        importSettings.lastN = null;
+    }
+    
+    closeImportSettingsModal();
+    importAppleNotes();
+}
+
+function importAppleNotes() {
+    const modal = document.getElementById('import-modal');
+    const statusEl = document.getElementById('import-status');
+    const progressEl = document.getElementById('import-progress');
+    const progressBar = document.getElementById('import-progress-bar');
+    const notesList = document.getElementById('import-notes-list');
+    
+    // Reset modal
+    modal.classList.remove('hidden');
+    statusEl.textContent = 'Starting import...';
+    progressEl.textContent = '0 / 0';
+    progressBar.style.width = '0%';
+    notesList.innerHTML = '';
+    
+    // Close button handler
+    window.closeImportModal = function() {
+        if (importEventSource) {
+            importEventSource.close();
+            importEventSource = null;
+        }
+        modal.classList.add('hidden');
+    };
+    
+    // Build query string with limit parameters
+    let queryParams = 'source=apple';
+    if (importSettings.firstN !== null) {
+        queryParams += `&first_n=${importSettings.firstN}`;
+    }
+    if (importSettings.lastN !== null) {
+        queryParams += `&last_n=${importSettings.lastN}`;
+    }
+    
+    // Start streaming import
+    importEventSource = new EventSource(`/api/sync/import/stream?${queryParams}`);
+    
+    let total = 0;
+    let current = 0;
+    let imported = 0;
+    let errors = 0;
+    
+    importEventSource.addEventListener('message', (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            
+            switch (data.type) {
+                case 'start':
+                    statusEl.textContent = data.message;
+                    break;
+                    
+                case 'status':
+                    statusEl.textContent = data.message;
+                    break;
+                    
+                case 'progress':
+                    if (data.total) total = data.total;
+                    current = data.current || current;
+                    imported = data.imported || imported;
+                    errors = data.errors || errors;
+                    
+                    const percentage = total > 0 ? (current / total) * 100 : 0;
+                    progressBar.style.width = `${percentage}%`;
+                    progressEl.textContent = `${current} / ${total}`;
+                    statusEl.textContent = `Importing... ${imported} imported, ${errors} errors`;
+                    break;
+                    
+                case 'note':
+                    imported = data.imported || imported;
+                    errors = data.errors || errors;
+                    
+                    // Add note to list
+                    const noteItem = document.createElement('div');
+                    noteItem.className = 'flex items-center gap-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg animate-fade-in';
+                    noteItem.innerHTML = `
+                        <svg class="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm font-medium text-slate-900 dark:text-slate-100">${escapeHtml(data.note.title || 'Untitled')}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">Imported successfully</div>
+                        </div>
+                    `;
+                    notesList.insertBefore(noteItem, notesList.firstChild);
+                    
+                    // Update notes list in sidebar
+                    notes.unshift(data.note);
+                    renderNotesList();
+                    break;
+                    
+                case 'error':
+                    errors = data.errors || errors;
+                    
+                    const errorItem = document.createElement('div');
+                    errorItem.className = 'flex items-center gap-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg animate-fade-in';
+                    errorItem.innerHTML = `
+                        <svg class="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm font-medium text-slate-900 dark:text-slate-100">${escapeHtml(data.note.title || 'Untitled')}</div>
+                            <div class="text-xs text-red-600 dark:text-red-400">${escapeHtml(data.error)}</div>
+                        </div>
+                    `;
+                    notesList.insertBefore(errorItem, notesList.firstChild);
+                    break;
+                    
+                case 'complete':
+                    statusEl.textContent = data.message || 'Import complete!';
+                    progressBar.style.width = '100%';
+                    progressEl.textContent = `${data.total} / ${data.total}`;
+                    
+                    setTimeout(() => {
+                        closeImportModal();
+                        loadNotes();
+                    }, 2000);
+                    break;
+            }
+        } catch (error) {
+            console.error('Error parsing SSE data:', error);
+        }
+    });
+    
+    importEventSource.addEventListener('error', (error) => {
+        console.error('SSE error:', error);
+        statusEl.textContent = 'Import failed. Please try again.';
+        setTimeout(() => {
+            closeImportModal();
+        }, 3000);
+    });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function stripHtml(html) {
+    if (!html) return '';
+    
+    // Create a temporary DOM element to parse HTML
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    
+    // Replace <br> and <br/> with newlines
+    const brs = doc.querySelectorAll('br');
+    brs.forEach(br => {
+        br.replaceWith('\n');
+    });
+    
+    // Replace block elements (div, p, etc.) with newlines
+    const blockElements = doc.querySelectorAll('div, p, h1, h2, h3, h4, h5, h6, li');
+    blockElements.forEach(el => {
+        if (el.textContent.trim()) {
+            el.insertAdjacentText('beforebegin', '\n');
+        }
+    });
+    
+    // Get text content and clean up multiple newlines
+    let text = doc.body.textContent || '';
+    
+    // Replace multiple consecutive newlines with at most two
+    text = text.replace(/\n{3,}/g, '\n\n');
+    
+    // Trim leading/trailing whitespace
+    return text.trim();
+}
+
+async function deleteSelectedNotes() {
+    if (selectedNotes.size === 0) {
+        return;
+    }
+    
+    const count = selectedNotes.size;
+    if (!confirm(`Are you sure you want to delete ${count} note${count > 1 ? 's' : ''}?`)) {
+        return;
+    }
+    
+    const noteIds = Array.from(selectedNotes);
+    
+    try {
+        await apiCall('/api/notes/bulk', {
+            method: 'DELETE',
+            body: JSON.stringify({ note_ids: noteIds })
+        });
+        
+        // Optimistically remove notes from UI
+        noteIds.forEach(noteId => {
+            const noteIndex = notes.findIndex(n => n.id === noteId);
+            if (noteIndex >= 0) {
+                notes.splice(noteIndex, 1);
+            }
+            
+            if (currentNoteId === noteId) {
+                currentNoteId = null;
+                document.getElementById('empty-state').classList.remove('hidden');
+                document.getElementById('editor').classList.add('hidden');
+            }
+        });
+        
+        selectedNotes.clear();
+        exitMultiSelectMode();
+    } catch (error) {
+        console.error('Failed to delete notes:', error);
+        alert('Failed to delete notes: ' + error.message);
+        // Refresh to ensure UI is in sync
+        await loadNotes();
+        selectedNotes.clear();
+        exitMultiSelectMode();
+    }
+}
+
+async function deleteNote(noteId) {
+    if (!confirm('Are you sure you want to delete this note?')) {
+        return;
+    }
+    
+    // Optimistically remove note from UI immediately
+    const noteIndex = notes.findIndex(n => n.id === noteId);
+    const deletedNote = noteIndex >= 0 ? notes[noteIndex] : null;
+    
+    // Remove from notes array immediately
+    if (noteIndex >= 0) {
+        notes.splice(noteIndex, 1);
+    }
+    
+    // If deleted note was currently selected, clear editor
+    if (currentNoteId === noteId) {
+        currentNoteId = null;
+        document.getElementById('empty-state').classList.remove('hidden');
+        document.getElementById('editor').classList.add('hidden');
+    }
+    
+    // Remove from selected notes if it was selected
+    if (selectedNotes && selectedNotes.has(noteId)) {
+        selectedNotes.delete(noteId);
+        updateBulkDeleteButton();
+    }
+    
+    // Update UI immediately
+    renderNotesList();
+    
+    // Then sync with server
+    try {
+        await apiCall(`/api/notes/${noteId}`, {
+            method: 'DELETE'
+        });
+    } catch (error) {
+        console.error('Failed to delete note:', error);
+        
+        // Revert the optimistic update on error
+        if (deletedNote && noteIndex >= 0) {
+            notes.splice(noteIndex, 0, deletedNote);
+            renderNotesList();
+        }
+        
+        // If error is "Note not found", the note might already be deleted
+        if (error.message && error.message.includes('not found')) {
+            // Note already deleted, UI is correct
+            return;
+        } else {
+            alert('Failed to delete note: ' + error.message);
+            // Refresh to ensure UI is in sync
+            await loadNotes();
+        }
+    }
+}
+</script>
+{% endblock %}

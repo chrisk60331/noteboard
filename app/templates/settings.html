@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - NoteBoard{% endblock %}
+
+{% block content %}
+<div class="px-4 py-6 sm:px-0">
+    <div class="max-w-2xl mx-auto">
+        <div class="bg-white dark:bg-slate-800 shadow-sm rounded-lg border border-gray-200 dark:border-slate-700 transition-colors duration-200">
+            <div class="p-6">
+                <h2 class="text-2xl font-semibold text-gray-900 dark:text-slate-100 mb-6">Settings</h2>
+                
+                <form id="settings-form" class="space-y-6">
+                    <!-- API Key -->
+                    <div>
+                        <label for="api-key" class="block text-sm font-medium text-gray-700 dark:text-slate-200 mb-2">
+                            Backboard.io API Key
+                        </label>
+                        <input 
+                            type="password" 
+                            id="api-key" 
+                            name="api_key"
+                            class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-400"
+                            placeholder="Enter your API key"
+                        >
+                        <p class="mt-1 text-sm text-gray-500 dark:text-slate-400">
+                            Your Backboard.io API key for authentication
+                        </p>
+                    </div>
+                    
+                    <!-- Base URL -->
+                    <div>
+                        <label for="base-url" class="block text-sm font-medium text-gray-700 dark:text-slate-200 mb-2">
+                            API Base URL
+                        </label>
+                        <input 
+                            type="text" 
+                            id="base-url" 
+                            name="base_url"
+                            class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-400"
+                            placeholder="https://app.backboard.io/api"
+                        >
+                        <p class="mt-1 text-sm text-gray-500 dark:text-slate-400">
+                            Base URL for the Backboard.io API
+                        </p>
+                    </div>
+                    
+                    <!-- Model -->
+                    <div>
+                        <label for="model" class="block text-sm font-medium text-gray-700 dark:text-slate-200 mb-2">
+                            LLM Model
+                        </label>
+                        <input 
+                            type="text" 
+                            id="model" 
+                            name="model"
+                            class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-400"
+                            placeholder="gpt-4"
+                        >
+                        <p class="mt-1 text-sm text-gray-500 dark:text-slate-400">
+                            Model identifier (e.g., gpt-4, claude-3-opus, etc.)
+                        </p>
+                    </div>
+                    
+                    <!-- Sync Enabled -->
+                    <div class="flex items-center">
+                        <input 
+                            type="checkbox" 
+                            id="sync-enabled" 
+                            name="sync_enabled"
+                            class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-slate-600 dark:bg-slate-700 rounded"
+                        >
+                        <label for="sync-enabled" class="ml-2 block text-sm text-gray-700 dark:text-slate-200">
+                            Enable automatic sync
+                        </label>
+                    </div>
+                    
+                    <!-- Assistant ID -->
+                    <div>
+                        <label for="assistant-id" class="block text-sm font-medium text-gray-700 dark:text-slate-200 mb-2">
+                            Assistant (Memory Collection)
+                        </label>
+                        <div class="flex gap-2">
+                            <select 
+                                id="assistant-id" 
+                                name="assistant_id"
+                                class="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+                            >
+                                <option value="">Loading assistants...</option>
+                            </select>
+                            <button 
+                                type="button"
+                                id="create-assistant-btn"
+                                onclick="createNewAssistant()"
+                                class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium transition-colors whitespace-nowrap"
+                            >
+                                Create New
+                            </button>
+                        </div>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-slate-400">
+                            Select an assistant to store notes. Create a new one to reindex notes with chunking.
+                        </p>
+                    </div>
+                    
+                    <!-- Submit Button -->
+                    <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-slate-700">
+                        <button 
+                            type="button" 
+                            onclick="loadSettings()" 
+                            class="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                        >
+                            Reset
+                        </button>
+                        <button 
+                            type="submit" 
+                            class="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-md hover:from-indigo-700 hover:to-purple-700 text-sm font-medium transition-all duration-200"
+                        >
+                            Save Settings
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let assistants = [];
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadAssistants();
+    loadSettings();
+    
+    const form = document.getElementById('settings-form');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await saveSettings();
+    });
+});
+
+async function loadAssistants() {
+    try {
+        assistants = await apiCall('/api/assistants');
+        const select = document.getElementById('assistant-id');
+        select.innerHTML = '<option value="">-- Select Assistant --</option>';
+        
+        assistants.forEach(assistant => {
+            const option = document.createElement('option');
+            option.value = assistant.assistant_id;
+            option.textContent = assistant.name || assistant.assistant_id;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Failed to load assistants:', error);
+        const select = document.getElementById('assistant-id');
+        select.innerHTML = '<option value="">Error loading assistants</option>';
+    }
+}
+
+async function loadSettings() {
+    try {
+        const settings = await apiCall('/api/settings');
+        
+        document.getElementById('api-key').value = settings.api_key || '';
+        document.getElementById('base-url').value = settings.base_url || 'https://app.backboard.io/api';
+        document.getElementById('model').value = settings.model || 'gpt-4';
+        document.getElementById('sync-enabled').checked = settings.sync_enabled !== false;
+        
+        // Set assistant ID if available
+        if (settings.assistant_id) {
+            const select = document.getElementById('assistant-id');
+            select.value = settings.assistant_id;
+        }
+    } catch (error) {
+        console.error('Failed to load settings:', error);
+        alert('Failed to load settings: ' + error.message);
+    }
+}
+
+async function createNewAssistant() {
+    const name = prompt('Enter a name for the new assistant:', 'Notes');
+    if (!name) {
+        return;
+    }
+    
+    try {
+        const newAssistant = await apiCall('/api/assistants', {
+            method: 'POST',
+            body: JSON.stringify({ name: name.trim() })
+        });
+        
+        // Add to assistants list and select it
+        assistants.push(newAssistant);
+        const select = document.getElementById('assistant-id');
+        const option = document.createElement('option');
+        option.value = newAssistant.assistant_id;
+        option.textContent = newAssistant.name || newAssistant.assistant_id;
+        select.appendChild(option);
+        select.value = newAssistant.assistant_id;
+        
+        alert(`Assistant "${newAssistant.name}" created successfully`);
+    } catch (error) {
+        console.error('Failed to create assistant:', error);
+        alert('Failed to create assistant: ' + error.message);
+    }
+}
+
+async function saveSettings() {
+    const formData = {
+        api_key: document.getElementById('api-key').value.trim(),
+        base_url: document.getElementById('base-url').value.trim(),
+        model: document.getElementById('model').value.trim(),
+        sync_enabled: document.getElementById('sync-enabled').checked,
+        assistant_id: document.getElementById('assistant-id').value || null
+    };
+    
+    try {
+        await apiCall('/api/settings', {
+            method: 'PUT',
+            body: JSON.stringify(formData)
+        });
+        
+        alert('Settings saved successfully');
+    } catch (error) {
+        console.error('Failed to save settings:', error);
+        alert('Failed to save settings: ' + error.message);
+    }
+}
+</script>
+{% endblock %}
